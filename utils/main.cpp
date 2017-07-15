@@ -1,9 +1,11 @@
 #include <iostream>
-#include <c++/array>
-#include <c++/map>
-#include <c++/vector>
+#include <array>
+#include <map>
+#include <vector>
+#include <string>
 #include "val_container.h"
 
+template <typename T> std::string type_name();
 
 int main()
 {
@@ -22,12 +24,13 @@ int main()
     constexpr size_t bit_count = 6;
     using data_type = unsigned char;
     using value_type = unsigned char;
-//    val_container<bit_count, data_type, value_type> values(arr.data(), arr.size());
-//
-//    for (auto it = values.begin(); it != values.end(); ++it) {
-//        std::cout << std::hex << "0x" << (unsigned int)it.get_value() << std::endl;
-//    }
+    val_container<bit_count, data_type, value_type> values(arr.data(), arr.size());
 
+    for (auto it = values.begin(); it != values.end(); ++it)
+    {
+        unsigned int aa = *it;
+        std::cout << std::hex << "0x" << aa << std::endl;
+    }
 
     std::cout << "************* set **************" << std::endl;
     // Установка
@@ -45,14 +48,18 @@ int main()
         std::cout << *it << std::endl;
     }
 
+    std::cout << "aa[0] = " << aa[0] << std::endl;
+    std::cout << "aa[1] = " << aa[1] << std::endl;
+    std::cout << "aa[2] = " << aa[2] << std::endl;
+
     std::vector<int> aaa;
     std::array<unsigned char, 3> arr2;
     val_container<bit_count, data_type, value_type> values2(arr2.data(), arr2.size());
 
     auto val_it = values2.begin();
     for (auto it = vec.begin(); it != vec.end(); ++it, ++val_it) {
-        val_it.set_value(*it);
-        //std::cout << std::hex << "0x" << *val_it << std::endl;
+        *val_it = *it;
+        auto a = (*val_it);
 
     }
     std::cout << "************* set2 **************" << std::endl;

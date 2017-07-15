@@ -3,284 +3,27 @@
 
 #include <c++/iterator>
 
-/**
- * Контейнер для упакованных значений
- * @tparam TBitCount - Количество бит на элемент
- * @tparam TDataType - Тип указателя на массив байт
- * @tparam TValueType - Тип значения
- */
 template<size_t TBitCount, typename TDataType, typename TValueType>
-//    typename std::enable_if<std::is_integral<TValueType>::value, int>::type = 0>
-class val_container {
-public:
+struct val_help
+{
     // Количество элементов умещающихся в целое количество байт
     static size_t vals_count_in_block;
     // Количество байт умещающиее целое количество элементов, размер которых TBitCount в битах
     static size_t bytes_count_in_block;
-    // Максимальное значение
+
     static TValueType max_value;
 
-protected:
-    using data_type = TDataType;
-
-    // Указатель на начало данных
-    data_type* _data;
-    // Размер данных, в байтах
-    size_t _size;
-
-public:
-    template<typename TValue>
-    class val_iterator : public std::iterator<std::random_access_iterator_tag, TValue, int> {
-        friend class val_container;
-
-    protected:
-        // Указатель на начало данных
-        TDataType* _it_data;
-        // Индекс текущего элемента
-        size_t _val_idx;
-//        val_proxy _px;
-
-        val_iterator(TDataType* data) : _it_data(data), _val_idx(0){}
-        val_iterator(TDataType* data, unsigned int val_idx) : _it_data(data), _val_idx(val_idx){}
-
-    public:
-        //template<typename TValue>
-        //class val_proxy : public std::iterator<std::random_access_iterator_tag, TValue, int> {
-        //    val_iterator<TValue>* _it;
-        //public:
-        //    val_proxy(val_iterator<TValue>* it) : _it(it) { }
-        //};
-
-        using it_type = val_iterator<TValue>;
-        using pointer = TValue*;
-        using reference = TValue&;
-        using difference_type = typename std::iterator<std::random_access_iterator_tag, TValue, int>::difference_type;
-
-        template<typename V2>
-        val_iterator(const val_iterator<V2>& other) : _it_data(other._it_data), _val_idx(other._val_idx) {}
-
-        template<typename V2>
-        val_iterator& operator=(const val_iterator<V2>& other) {
-            _it_data = other._it_data;
-            _val_idx = other._val_idx;
-            return *this;
-        }
-
-        //reference operator*() const {
-        //    //auto tmp = get_value();
-        //    return val_proxy(nullptr);
-        //}
-//
-        //pointer operator->() const {
-        //    // ToDo
-        //    return *this;
-        //}
-
-        operator TValue() const {
-            return get_value();
-        }
-
-        val_iterator& operator++() {
-            if(_val_idx == vals_count_in_block - 1){
-                _it_data += bytes_count_in_block;
-                _val_idx = 0;
-            }
-            else {
-                ++_val_idx;
-            }
-            return *this;
-        }
-
-        val_iterator& operator--() {
-            if(_val_idx == 0){
-                _it_data -= bytes_count_in_block;
-                _val_idx = vals_count_in_block - 1;
-            }
-            else {
-                --_val_idx;
-            }
-            return *this;
-        }
-
-        val_iterator operator++(int) {
-            val_iterator tmp(*this);
-            ++(*this);
-            return tmp;
-        }
-
-        val_iterator operator--(int) {
-            val_iterator tmp(*this);
-            --(*this);
-            return tmp;
-        }
-
-        val_iterator& operator+=(const difference_type& n) {
-            auto idx = _val_idx + n;
-            _it_data += (idx / vals_count_in_block) * bytes_count_in_block;
-            _val_idx += idx % vals_count_in_block;
-            return *this;
-        }
-
-        val_iterator operator+(const difference_type& n) const {
-            val_iterator tmp(*this);
-            tmp += n;
-            return tmp;
-        }
-
-        val_iterator& operator-=(const difference_type& n) {
-            // ToDo
-            if(n <= _val_idx)
-            {
-                _val_idx -= n;
-                return *this;
-            }
-
-            auto idx = _val_idx + n;
-            auto diff_idx = (n % vals_count_in_block)- _val_idx;
-            _it_data += (idx / vals_count_in_block) * bytes_count_in_block;
-            _val_idx += vals_count_in_block - diff_idx;
-            return *this;
-        }
-
-        val_iterator operator-(const difference_type& n) const {
-            val_iterator tmp(*this);
-            tmp -= n;
-            return tmp;
-        }
-
-        reference operator[](const difference_type& n) const {
-            // ToDo
-            return (*_it_data)[_val_idx + n];
-        }
-
-        bool operator==(const val_iterator& other) const {
-            return _it_data == other._it_data && _val_idx == other._val_idx;
-        }
-
-        bool operator!=(const val_iterator& other) const {
-            return !(*this == other);
-        }
-
-        bool operator<(const val_iterator& other) const {
-            return _it_data == other._it_data
-                   ? _val_idx < other._val_idx
-                   : _it_data < other._it_data;
-        }
-
-        bool operator<=(const val_iterator& other) const {
-            return *this < other || *this == other;
-        }
-
-        bool operator>(const val_iterator& other) const {
-            return !(*this <= other);
-        }
-
-        bool operator>=(const val_iterator& other) const {
-            return !(*this < other);
-        }
-
-//        difference_type operator+(const val_iterator& other) const {
-//            // ToDo
-//            return _val_idx + other._val_idx;
-//        }
-//
-//        difference_type operator-(const val_iterator& other) const {
-//            // ToDo
-//            return _val_idx - other._val_idx;
-//        }
-
-        TValue get_value() const
-        {
-            size_t end_bit_idx = (_val_idx + 1) * TBitCount;
-            size_t end_byte_idx = end_bit_idx / 8;
-
-            size_t data_shift = 8 - end_bit_idx % 8;
-            size_t lo_shift = data_shift;
-            size_t hi_shift = sizeof(TValue) * 8 - data_shift;
-
-            auto value_pos = static_cast<TValue*>(_it_data + end_byte_idx);
-            TValue lo = *value_pos >> lo_shift;
-            TValue hi = _val_idx > 0 ? *(value_pos - 1) << hi_shift : 0;
-
-            return (hi | lo) & max_value;
-        }
-
-        void set_value(TValue value) const
-        {
-            TValue val = value & max_value;
-
-            size_t end_bit_idx = (_val_idx + 1) * TBitCount;
-            size_t end_byte_idx = end_bit_idx / 8;
-
-            size_t data_shift = 8 - end_bit_idx % 8;
-            size_t lo_shift = data_shift;
-            size_t hi_shift = sizeof(TValue) * 8 - data_shift;
-
-            auto value_pos = static_cast<TValue*>(_it_data + end_byte_idx);
-
-            TValue &lo = *value_pos;
-            lo = (lo & ~(max_value << lo_shift)) | (val << lo_shift);
-
-            if(_val_idx > 0)
-            {
-                TValue &hi = *(value_pos - 1);
-                hi = (hi & ~(max_value >> hi_shift)) | (val >> hi_shift);
-            }
-        }
-    };
-
-    using iterator = val_iterator<TValueType>;
-    using const_iterator = val_iterator<const TValueType>;
-
-    val_container(TDataType* data, size_t size) : _data(data), _size(size)
-    {
-        static_assert(sizeof(TDataType) == 1, "sizeof TDataType must be 1 byte");
-        static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
-
-        static volatile bool s = init(size);
-
-        if(size % bytes_count_in_block != 0)
-            throw std::invalid_argument(std::string("size: ") +  std::to_string(size)+ " % " + std::to_string(bytes_count_in_block) + " != 0");
-    }
-    val_container(TDataType& data, size_t size) : val_container(&data, size) {}
-
-    iterator begin() {
-        return iterator(_data);
-    }
-
-    const_iterator begin() const {
-        return const_iterator(_data);
-    }
-
-    const_iterator cbegin() const {
-        return const_iterator(_data);
-    }
-
-    iterator end() {
-        return iterator(_data + _size);
-    }
-
-    const_iterator end() const {
-        return const_iterator(_data + _size);
-    }
-
-    const_iterator cend() const {
-        return const_iterator(_data + _size);
-    }
-private:
     static bool init(size_t size)
     {
         size_t bits = 0;
         size_t data_size_in_bits = sizeof(TDataType) * 8;
-        do
-        {
+        do {
             vals_count_in_block++;
             bits += TBitCount;
-        }
-        while(bits % data_size_in_bits != 0);
+        } while (bits % data_size_in_bits != 0);
 
         bytes_count_in_block = bits / 8;
-        max_value <<=  TBitCount;
+        max_value <<= TBitCount;
         max_value--;
 
         return true;
@@ -288,12 +31,287 @@ private:
 };
 
 template<size_t TBitCount, typename TDataType, typename TValueType>
-size_t val_container<TBitCount, TDataType, TValueType>::vals_count_in_block = 0;
+size_t val_help<TBitCount, TDataType, TValueType>::vals_count_in_block = 0;
 
 template<size_t TBitCount, typename TDataType, typename TValueType>
-size_t val_container<TBitCount, TDataType, TValueType>::bytes_count_in_block = 0;
+size_t val_help<TBitCount, TDataType, TValueType>::bytes_count_in_block = 0;
 
 template<size_t TBitCount, typename TDataType, typename TValueType>
-TValueType val_container<TBitCount, TDataType, TValueType>::max_value = 1;
+TValueType val_help<TBitCount, TDataType, TValueType>::max_value = 1;
+
+template<size_t TBitCount, typename TDataType, typename TValueType>
+class val_reference
+{
+    using h = val_help<TBitCount, TDataType, TValueType>;
+    TDataType* _data;
+    size_t _val_idx;
+
+public:
+    val_reference() : _data(nullptr), _val_idx(0) {}
+    val_reference(TDataType* data, size_t val_idx) : _data(data), _val_idx(val_idx) {}
+
+    operator TValueType() const
+    { return get_value(); }
+
+    val_reference& operator=(TValueType val)
+    {
+        set_value(val);
+        return *this;
+    }
+
+    val_reference& operator=(const val_reference rhs) const
+    { return *this = TValueType(rhs); }
+
+    bool operator==(const val_reference rhs) const
+    { return TValueType(*this) == TValueType(rhs); }
+
+    bool operator<(const val_reference rhs) const
+    { return TValueType(*this) < TValueType(rhs); }
+
+    // ToDo other operation
+private:
+
+    TValueType get_value() const
+    {
+        size_t end_bit_idx = (_val_idx + 1) * TBitCount;
+        size_t end_byte_idx = end_bit_idx / 8;
+
+        size_t data_shift = 8 - end_bit_idx % 8;
+        size_t lo_shift = data_shift;
+        size_t hi_shift = sizeof(TValueType) * 8 - data_shift;
+
+        auto value_pos = static_cast<TValueType*>(_data + end_byte_idx);
+        TValueType lo = *value_pos >> lo_shift;
+        TValueType hi = _val_idx > 0 ? *(value_pos - 1) << hi_shift : 0;
+
+        return (hi | lo) & h::max_value;
+    }
+
+    void set_value(TValueType value)
+    {
+        TValueType val = value & h::max_value;
+
+        size_t end_bit_idx = (_val_idx + 1) * TBitCount;
+        size_t end_byte_idx = end_bit_idx / 8;
+
+        size_t data_shift = 8 - end_bit_idx % 8;
+        size_t lo_shift = data_shift;
+        size_t hi_shift = sizeof(TValueType) * 8 - data_shift;
+
+        auto value_pos = static_cast<TValueType*>(_data + end_byte_idx);
+
+        TValueType &lo = *value_pos;
+        lo = (lo & ~(h::max_value << lo_shift)) | (val << lo_shift);
+
+        if(_val_idx > 0)
+        {
+            TValueType &hi = *(value_pos - 1);
+            hi = (hi & ~(h::max_value >> hi_shift)) | (val >> hi_shift);
+        }
+    }
+};
+
+template<size_t TBitCount, typename TDataType, typename TValueType>
+class val_iterator : public std::iterator<std::random_access_iterator_tag, TValueType>
+{
+    using h = val_help<TBitCount, TDataType, TValueType>;
+    TDataType *_data;
+    size_t _val_idx;
+
+public:
+    using reference = val_reference<TBitCount, TDataType, TValueType>;
+    using pointer = val_reference<TBitCount, TDataType, TValueType>*;
+    using iterator = val_iterator<TBitCount, TDataType, TValueType>;
+    using difference_type = int;
+
+    val_iterator(TDataType* data) : _data(data), _val_idx(0){}
+    val_iterator(TDataType* data, unsigned int val_idx) : _data(data), _val_idx(val_idx){}
+    val_iterator(const iterator& rhs) : _data(rhs._data), _val_idx(rhs._val_idx) {}
+
+    iterator& operator=(const iterator& rhs)
+    {
+        _data = rhs._data;
+        _val_idx = rhs._val_idx;
+        return *this;
+    }
+
+    reference operator*() const
+    { return reference(_data, _val_idx); }
+
+    reference operator[](const difference_type& n) const
+    { return *(*this + n); }
+
+    iterator& operator++()
+    {
+        if(_val_idx == h::vals_count_in_block - 1)
+        {
+            _data += h::bytes_count_in_block;
+            _val_idx = 0;
+        }
+        else
+        {
+            ++_val_idx;
+        }
+        return *this;
+    }
+
+    iterator& operator--()
+    {
+        if(_val_idx == 0)
+        {
+            _data -= h::bytes_count_in_block;
+            _val_idx = h::vals_count_in_block - 1;
+        }
+        else
+        {
+            --_val_idx;
+        }
+        return *this;
+    }
+
+    iterator operator++(int)
+    {
+        iterator tmp(*this);
+        ++(*this);
+        return tmp;
+    }
+
+    iterator operator--(int)
+    {
+        iterator tmp(*this);
+        --(*this);
+        return tmp;
+    }
+
+    iterator& operator+=(const difference_type& n)
+    {
+        auto idx = _val_idx + n;
+        _data += (idx / h::vals_count_in_block) * h::bytes_count_in_block;
+        _val_idx += idx % h::vals_count_in_block;
+        return *this;
+    }
+
+    iterator operator+(const difference_type& n) const
+    {
+        iterator tmp(*this);
+        tmp += n;
+        return tmp;
+    }
+
+    iterator& operator-=(const difference_type& n)
+    {
+        // ToDo проверить
+        if(n <= _val_idx)
+        {
+            _val_idx -= n;
+            return *this;
+        }
+
+        auto idx = _val_idx + n;
+        auto diff_idx = (n % h::vals_count_in_block)- _val_idx;
+        _data += (idx / h::vals_count_in_block) * h::bytes_count_in_block;
+        _val_idx += h::vals_count_in_block - diff_idx;
+        return *this;
+    }
+
+    iterator operator-(const difference_type& n) const
+    {
+        iterator tmp(*this);
+        tmp -= n;
+        return tmp;
+    }
+
+    bool operator==(const iterator& rhs) const
+    {
+        return _data == rhs._data && _val_idx == rhs._val_idx;
+    }
+
+    bool operator!=(const iterator& rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    bool operator<(const iterator& rhs) const
+    {
+        return _data == rhs._data
+            ? _val_idx < rhs._val_idx
+            : _data < rhs._data;
+    }
+
+    bool operator<=(const iterator& rhs) const
+    {
+        return *this < rhs || *this == rhs;
+    }
+
+    bool operator>(const iterator& rhs) const
+    {
+        return !(*this <= rhs);
+    }
+
+    bool operator>=(const iterator& rhs) const
+    {
+        return !(*this < rhs);
+    }
+
+    difference_type operator+(const iterator& rhs) const
+    {
+        // ToDo
+        return _val_idx + rhs._val_idx;
+    }
+    difference_type operator-(const iterator& rhs) const {
+        // ToDo
+        return _val_idx - rhs._val_idx;
+    }
+};
+
+/**
+ * Контейнер для упакованных значений
+ * @tparam TBitCount - Количество бит на элемент
+ * @tparam TDataType - Тип указателя на массив байт
+ * @tparam TValueType - Тип значения
+ */
+template<size_t TBitCount, typename TDataType, typename TValueType,
+    typename std::enable_if<std::is_integral<TValueType>::value, int>::type = 0>
+class val_container
+{
+    using h = val_help<TBitCount, TDataType, TValueType>;
+    TDataType* _data;
+    size_t _size;
+
+public:
+
+    using iterator = val_iterator<TBitCount, TDataType, TValueType>;
+    using const_iterator = val_iterator<TBitCount, TDataType, const TValueType>;
+
+    val_container(TDataType* data, size_t size) : _data(data), _size(size)
+    {
+        static_assert(sizeof(TDataType) == 1, "sizeof TDataType must be 1 byte");
+        static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
+
+        static volatile bool s = h::init(size);
+
+        if(size % h::bytes_count_in_block != 0)
+            throw std::invalid_argument(std::string("size: ") +  std::to_string(size)+ " % " + std::to_string(h::bytes_count_in_block) + " != 0");
+    }
+    val_container(TDataType& data, size_t size) : val_container(&data, size) {}
+
+    iterator begin()
+    { return iterator(_data); }
+
+    const_iterator begin() const
+    { return const_iterator(_data); }
+
+    const_iterator cbegin() const
+    { return const_iterator(_data); }
+
+    iterator end()
+    { return iterator(_data + _size); }
+
+    const_iterator end() const
+    { return const_iterator(_data + _size); }
+
+    const_iterator cend() const
+    { return const_iterator(_data + _size); }
+};
 
 #endif //UTILS_VAL_CONTAINER_H
