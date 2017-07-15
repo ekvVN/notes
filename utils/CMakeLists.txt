@@ -3,5 +3,5 @@ project(utils)
 
 set(CMAKE_CXX_STANDARD 11)
 
-set(SOURCE_FILES main.cpp offset_of.h)
+set(SOURCE_FILES main.cpp offset_of.h val_container.h)
 add_executable(utils ${SOURCE_FILES})
