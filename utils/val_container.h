@@ -13,8 +13,13 @@ struct val_help
 
     static TValueType max_value;
 
-    static bool init(size_t size)
+    static bool init()
     {
+        constexpr size_t value_size_in_bits = sizeof(TValueType) * 8;
+        static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
+        static_assert(TBitCount <= value_size_in_bits, "TValueType doesn't have enough bit");
+        static_assert(sizeof(TDataType) == 1, "sizeof TDataType must be 1 byte");
+
         size_t bits = 0;
         size_t data_size_in_bits = sizeof(TDataType) * 8;
         do {
@@ -288,7 +293,7 @@ public:
         static_assert(sizeof(TDataType) == 1, "sizeof TDataType must be 1 byte");
         static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
 
-        static volatile bool s = h::init(size);
+        static volatile bool s = h::init();
 
         if(size % h::bytes_count_in_block != 0)
             throw std::invalid_argument(std::string("size: ") +  std::to_string(size)+ " % " + std::to_string(h::bytes_count_in_block) + " != 0");
