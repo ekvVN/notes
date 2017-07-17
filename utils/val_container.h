@@ -15,6 +15,10 @@ struct val_help
 
     static bool init()
     {
+        vals_count_in_block = 0;
+        bytes_count_in_block = 0;
+        max_value = 1;
+
         constexpr size_t value_size_in_bits = sizeof(TValueType) * 8;
         static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
         static_assert(TBitCount <= value_size_in_bits, "TValueType doesn't have enough bit");
@@ -28,8 +32,7 @@ struct val_help
         } while (bits % data_size_in_bits != 0);
 
         bytes_count_in_block = bits / 8;
-        max_value <<= TBitCount;
-        max_value--;
+        max_value = (1 << TBitCount) - 1;
 
         return true;
     }
@@ -74,6 +77,9 @@ public:
     { return TValueType(*this) < TValueType(rhs); }
 
     // ToDo other operation
+
+    size_t idx() const
+    { return _val_idx; }
 private:
 
     TValueType get_value() const
@@ -85,7 +91,7 @@ private:
         size_t lo_shift = data_shift;
         size_t hi_shift = sizeof(TValueType) * 8 - data_shift;
 
-        auto value_pos = static_cast<TValueType*>(_data + end_byte_idx);
+        auto value_pos = (TValueType*)(_data + end_byte_idx);
         TValueType lo = *value_pos >> lo_shift;
         TValueType hi = _val_idx > 0 ? *(value_pos - 1) << hi_shift : 0;
 
@@ -192,7 +198,7 @@ public:
     {
         auto idx = _val_idx + n;
         _data += (idx / h::vals_count_in_block) * h::bytes_count_in_block;
-        _val_idx += idx % h::vals_count_in_block;
+        _val_idx = idx % h::vals_count_in_block;
         return *this;
     }
 
@@ -205,17 +211,16 @@ public:
 
     iterator& operator-=(const difference_type& n)
     {
-        // ToDo проверить
         if(n <= _val_idx)
         {
             _val_idx -= n;
             return *this;
         }
 
-        auto idx = _val_idx + n;
-        auto diff_idx = (n % h::vals_count_in_block)- _val_idx;
-        _data += (idx / h::vals_count_in_block) * h::bytes_count_in_block;
-        _val_idx += h::vals_count_in_block - diff_idx;
+        auto diff_idx = (n % h::vals_count_in_block) - _val_idx;
+        auto idx = n - diff_idx;
+        _data -= (idx / h::vals_count_in_block + 1) * h::bytes_count_in_block;
+        _val_idx = h::vals_count_in_block - diff_idx;
         return *this;
     }
 
@@ -257,16 +262,6 @@ public:
     {
         return !(*this < rhs);
     }
-
-    difference_type operator+(const iterator& rhs) const
-    {
-        // ToDo
-        return _val_idx + rhs._val_idx;
-    }
-    difference_type operator-(const iterator& rhs) const {
-        // ToDo
-        return _val_idx - rhs._val_idx;
-    }
 };
 
 /**
@@ -284,11 +279,17 @@ class val_container
     size_t _size;
 
 public:
-
+    using value_type = TValueType;
+    using size_type = size_t;
+    using difference_type = int;
+    using reference = val_reference<TBitCount, TDataType, TValueType>;
+    using const_reference = TValueType;
+    using pointer = val_reference<TBitCount, TDataType, TValueType>*;
+    using const_pointer = const TValueType*;
     using iterator = val_iterator<TBitCount, TDataType, TValueType>;
     using const_iterator = val_iterator<TBitCount, TDataType, const TValueType>;
 
-    val_container(TDataType* data, size_t size) : _data(data), _size(size)
+    val_container(TDataType* data = nullptr, size_t size = 0) : _data(data), _size(size)
     {
         static_assert(sizeof(TDataType) == 1, "sizeof TDataType must be 1 byte");
         static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
@@ -317,6 +318,18 @@ public:
 
     const_iterator cend() const
     { return const_iterator(_data + _size); }
+
+    size_type size() const
+    { return _size; }
+
+    bool empty() const
+    { return begin() == end(); }
+
+    reference operator[](size_type n)
+    { return *(iterator(_data) + n); }
+
+    const_reference operator[](size_type n) const
+    { return *(const_iterator(_data) + n); }
 };
 
 #endif //UTILS_VAL_CONTAINER_H
