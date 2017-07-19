@@ -6,18 +6,26 @@
 template<size_t TBitCount, typename TDataType, typename TValueType>
 struct val_help
 {
-    // Количество элементов умещающихся в целое количество байт
+    /**
+     * Количество элементов умещающихся в целое количество байт
+     */
     static size_t vals_count_in_block;
-    // Количество байт умещающиее целое количество элементов, размер которых TBitCount в битах
+
+    /**
+     * Количество байт умещающиее целое количество элементов, размер которых TBitCount в битах
+     */
     static size_t bytes_count_in_block;
 
+    /**
+     * Максимальное значение типа
+     */
     static TValueType max_value;
 
     static bool init()
     {
-        vals_count_in_block = 0;
-        bytes_count_in_block = 0;
-        max_value = 1;
+        static bool inited = false;
+        if(inited)
+            return true;
 
         constexpr size_t value_size_in_bits = sizeof(TValueType) * 8;
         static_assert(TBitCount >= 1, "TBitCount must be at least 1 bit");
@@ -32,9 +40,29 @@ struct val_help
         } while (bits % data_size_in_bits != 0);
 
         bytes_count_in_block = bits / 8;
-        max_value = (1 << TBitCount) - 1;
 
+        inited = true;
         return true;
+    }
+
+    /**
+     * Получить номер байта, в котором начинается значение элемента
+     * @param val_idx Индекс элемента в блоке
+     * @return Номер байта
+     */
+    static size_t get_byte_idx(size_t val_idx)
+    {
+        return val_idx * bytes_count_in_block / vals_count_in_block;
+    }
+
+    /**
+     * Получить кол-во бит для сдвига младшей части, чтобы получить значение элемента с индексом
+     * @param val_idx Индекс элемента в блоке
+     * @return Сдвиг младшей части
+     */
+    static size_t get_lo_shift(size_t val_idx)
+    {
+        return (val_idx * TBitCount) % 8;
     }
 };
 
@@ -45,7 +73,7 @@ template<size_t TBitCount, typename TDataType, typename TValueType>
 size_t val_help<TBitCount, TDataType, TValueType>::bytes_count_in_block = 0;
 
 template<size_t TBitCount, typename TDataType, typename TValueType>
-TValueType val_help<TBitCount, TDataType, TValueType>::max_value = 1;
+TValueType val_help<TBitCount, TDataType, TValueType>::max_value = (1 << TBitCount) - 1;
 
 template<size_t TBitCount, typename TDataType, typename TValueType>
 class val_reference
@@ -84,39 +112,34 @@ private:
 
     TValueType get_value() const
     {
-        size_t end_bit_idx = (_val_idx + 1) * TBitCount;
-        size_t end_byte_idx = end_bit_idx / 8;
+        size_t byte_idx = h::get_byte_idx(_val_idx);
+        auto ptr_to_val = reinterpret_cast<TValueType*>(_data + byte_idx);
+        size_t lo_shift = h::get_lo_shift(_val_idx);
+        size_t hi_shift = sizeof(TValueType) * 8 - lo_shift;
 
-        size_t data_shift = 8 - end_bit_idx % 8;
-        size_t lo_shift = data_shift;
-        size_t hi_shift = sizeof(TValueType) * 8 - data_shift;
-
-        auto value_pos = (TValueType*)(_data + end_byte_idx);
-        TValueType lo = *value_pos >> lo_shift;
-        TValueType hi = _val_idx > 0 ? *(value_pos - 1) << hi_shift : 0;
+        bool is_hi_valid = byte_idx + sizeof(TValueType) < h::bytes_count_in_block;
+        auto lo = *ptr_to_val >> lo_shift;
+        auto hi = is_hi_valid ? *(ptr_to_val + 1) << hi_shift : 0;
 
         return (hi | lo) & h::max_value;
     }
 
     void set_value(TValueType value)
     {
-        TValueType val = value & h::max_value;
+        auto val = value & h::max_value;
 
-        size_t end_bit_idx = (_val_idx + 1) * TBitCount;
-        size_t end_byte_idx = end_bit_idx / 8;
+        size_t byte_idx = h::get_byte_idx(_val_idx);
+        auto ptr_to_val = reinterpret_cast<TValueType*>(_data + byte_idx);
+        size_t lo_shift = h::get_lo_shift(_val_idx);
+        size_t hi_shift = sizeof(TValueType) * 8 - lo_shift;
 
-        size_t data_shift = 8 - end_bit_idx % 8;
-        size_t lo_shift = data_shift;
-        size_t hi_shift = sizeof(TValueType) * 8 - data_shift;
-
-        auto value_pos = static_cast<TValueType*>(_data + end_byte_idx);
-
-        TValueType &lo = *value_pos;
+        TValueType &lo = *ptr_to_val;
         lo = (lo & ~(h::max_value << lo_shift)) | (val << lo_shift);
 
-        if(_val_idx > 0)
+        bool is_hi_valid = byte_idx + sizeof(TValueType) < h::bytes_count_in_block;
+        if(is_hi_valid)
         {
-            TValueType &hi = *(value_pos - 1);
+            TValueType &hi = *(ptr_to_val + 1);
             hi = (hi & ~(h::max_value >> hi_shift)) | (val >> hi_shift);
         }
     }
