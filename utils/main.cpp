@@ -4,11 +4,32 @@
 #include <vector>
 #include <string>
 #include "val_container.h"
+#include "TestVariadicTemplate.h"
+#include <list>
+
 
 template <typename T> std::string type_name();
 
 int main()
 {
+    std::vector<double> vd{3.14, 8.1, 3.2, 1.0};
+    print_container(vd);
+
+    std::list<int> li{1, 2, 3, 5};
+    print_container(li);
+
+
+    CC::coder1 c1{10,20,30,40,50,60,70,80,64,128,255};
+    CC::coder2 c2{0,0,0,0,0,0,0,0,0,0,0};
+    auto pixCount = c1.size();
+    encode(c1, c2, pixCount);
+
+    auto srcType = std::make_shared<VideoTypeIr<6>>();
+    auto dstType = std::make_shared<VideoTypeIr<4>>();
+    CC::coder1 src1{10,20,30,40,50,60,70,80,64,128,255};
+    CC::coder2 dst2{0,0,0,0,0,0,0,0,0,0,0};
+    encode(src1, srcType.get(), dst2, dstType.get(), pixCount);
+
 //    std::vector<bool> vec = {0xFF};
     std::cout << "Hello, World!" << std::endl;
 
